@@ -239,17 +239,25 @@ instance {I : Type} (U : Ultrafilter I) (α : Type) [LT α] : LT (Ultra U α) wh
 
 /-! ## Test case: the index set `ℕ` -/
 
+section NatTest
+
+variable (U : Ultrafilter ℕ)
+
+/-- Inside this section, `∗α` means `Ultra U α` for the fixed ultrafilter `U`. -/
+local notation "∗" α:max => Ultra U α
+
 /-- A nonstandard natural number: the diagonal for the index set `ℕ`. -/
-def big (U : Ultrafilter ℕ) : Ultra U ℕ := Ultra.diag U
+def big : ∗ℕ := Ultra.diag U
 
 /-- `big` is non-standard, as a case of the general `diag_ne_lift`. -/
-example (U : Ultrafilter ℕ) (hU : (U : Filter ℕ) ≤ .cofinite) (n : ℕ) :
-    big U ≠ Ultra.lift n :=
+example (hU : (U : Filter ℕ) ≤ .cofinite) (n : ℕ) : big U ≠ (n : ∗ℕ) :=
   Ultra.diag_ne_lift hU n
 
+/-- Applying a nonstandard function to a nonstandard number. -/
+example (f : ∗(ℕ → ℕ)) (x : ∗ℕ) : ∗ℕ := f x
+
 /-- Nonstandard natural number `big` is bigger than all standard natural numbers. -/
-theorem big_gt (U : Ultrafilter ℕ) (hU : (U : Filter ℕ) ≤ .cofinite) (n : ℕ) :
-    (n : Ultra U ℕ) < big U := by
+theorem big_gt (hU : (U : Filter ℕ) ≤ .cofinite) (n : ℕ) : (n : ∗ℕ) < big U := by
   -- `U` refines the Fréchet filter, so it contains every cofinite set,
   -- in particular `{i | n < i}`, whose complement `{i | i ≤ n}` is finite
   have hev : ∀ᶠ i in (U : Filter ℕ), n < i :=
@@ -269,6 +277,8 @@ theorem big_gt (U : Ultrafilter ℕ) (hU : (U : Filter ℕ) ≤ .cofinite) (n : 
     (Ultra.lift n)) (big U))
   rw [hx, hstd]
   trivial
+
+end NatTest
 
 /-- Example: Mathlib's free ultrafilter `hyperfilter ℕ` (built from the Fréchet filter). -/
 example (n : ℕ) : (n : Ultra (hyperfilter ℕ) ℕ) < big (hyperfilter ℕ) :=
