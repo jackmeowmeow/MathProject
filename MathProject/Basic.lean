@@ -112,32 +112,33 @@ end Product
 
 noncomputable section
 
-def ultraFilter : Ultrafilter ℕ := Ultrafilter.of .atTop
-
 /--
-Converts a Type into a nonstandard Type using an ultrafilter,
-for example `Ultra ℕ` are non-standard natural numbers. -/
-def Ultra (α : Type) : Type := Product.PartialProduct (ultraFilter : Filter ℕ) (fun _ ↦ α)
+Converts a Type into a nonstandard Type using an ultrafilter `U`,
+for example `Ultra U ℕ` are non-standard natural numbers. -/
+def Ultra {I : Type} (U : Ultrafilter I) (α : Type) : Type :=
+  Product.PartialProduct (U : Filter I) (fun _ ↦ α)
 
 namespace Ultra
 
-/-- The class of a section: the basic way to build an element of `Ultra α`. -/
-def mk {α : Type} (s : Product.Section (ultraFilter : Filter ℕ) (fun _ ↦ α)) : Ultra α :=
+variable {I : Type} {U : Ultrafilter I}
+
+/-- The class of a section: the basic way to build an element of `Ultra U α`. -/
+def mk {α : Type} (s : Product.Section (U : Filter I) (fun _ ↦ α)) : Ultra U α :=
   Quotient.mk _ s
 
 /-- The section defined at every index by `f`. -/
-def ofFun {α : Type} (f : ℕ → α) : Ultra α :=
+def ofFun {α : Type} (f : I → α) : Ultra U α :=
   mk ⟨univ, univ_mem, fun i ↦ f i⟩
 
 /-- Lifts an object into the nonstandard type -/
-@[coe] def lift {α : Type} (a : α) : Ultra α := ofFun (fun _ ↦ a)
-instance (α : Type) : Coe α (Ultra α) := ⟨Ultra.lift⟩
+@[coe] def lift {α : Type} (a : α) : Ultra U α := ofFun (fun _ ↦ a)
+instance {I : Type} (U : Ultrafilter I) (α : Type) : Coe α (Ultra U α) := ⟨Ultra.lift⟩
 
 /-- `lift` of a standard number to nonstandard is injective: if `lift a₁ = lift a₂`,
 then `a₁ = a₂` on a set in the ultrafilter, which is never empty. -/
-theorem lift.inj {α : Type} : (Ultra.lift (α := α)).Injective := by
+theorem lift.inj {α : Type} : (Ultra.lift (U := U) (α := α)).Injective := by
   intro a₁ a₂ eq
-  have h : ∀ᶠ i in (ultraFilter : Filter ℕ), ∀ (_ : i ∈ univ) (_ : i ∈ univ), a₁ = a₂ :=
+  have h : ∀ᶠ i in (U : Filter I), ∀ (_ : i ∈ univ) (_ : i ∈ univ), a₁ = a₂ :=
     Quotient.exact eq
   obtain ⟨i, hi⟩ := h.exists
   exact hi trivial trivial
@@ -145,41 +146,41 @@ theorem lift.inj {α : Type} : (Ultra.lift (α := α)).Injective := by
 /-- If `α` is finite, every nonstandard object can be represented with a standard one:
 the domain is a finite union of the sets where the section takes each value, and an
 ultrafilter contains one piece of any finite union it contains. -/
-theorem lift.surj {α : Type} [Finite α] : (lift (α := α)).Surjective := by
+theorem lift.surj {α : Type} [Finite α] : (lift (U := U) (α := α)).Surjective := by
   intro x
   induction x using Quotient.inductionOn with | h s => ?_
   -- S a: the indices where the section is defined and takes the value `a`
-  let S : α → Set ℕ := fun a ↦ {i | ∃ h : i ∈ s.domain, s.value ⟨i, h⟩ = a}
+  let S : α → Set I := fun a ↦ {i | ∃ h : i ∈ s.domain, s.value ⟨i, h⟩ = a}
   -- the finitely many sets `S a` cover the domain, so the ultrafilter contains one of them
-  have hcover : (⋃ a ∈ (univ : Set α), S a) ∈ ultraFilter := by
+  have hcover : (⋃ a ∈ (univ : Set α), S a) ∈ U := by
     apply Filter.mem_of_superset s.large
     intro i hi
     simp only [mem_iUnion]
     exact ⟨s.value ⟨i, hi⟩, trivial, hi, rfl⟩
   obtain ⟨a, -, ha⟩ := (Ultrafilter.finite_biUnion_mem_iff finite_univ).mp hcover
   refine ⟨a, Quotient.sound ?_⟩
-  show ∀ᶠ i in (ultraFilter : Filter ℕ), ∀ (_ : i ∈ univ) (h : i ∈ s.domain),
+  show ∀ᶠ i in (U : Filter I), ∀ (_ : i ∈ univ) (h : i ∈ s.domain),
     a = s.value ⟨i, h⟩
   filter_upwards [ha] with i ⟨h, hv⟩
   intro _ _
   exact hv.symm
 
-/-- On finite types, `lift` between `α` and `Ultra α` as an isomorphism. -/
-def liftFin {α : Type} [Finite α] : α ≃ Ultra α :=
+/-- On finite types, `lift` between `α` and `Ultra U α` as an isomorphism. -/
+def liftFin {α : Type} [Finite α] : α ≃ Ultra U α :=
   .ofBijective Ultra.lift ⟨Ultra.lift.inj, Ultra.lift.surj⟩
-/-- Conversion of a finite `Ultra α` back to `α` -/
-def std {α : Type} [Finite α] (a : Ultra α) : α := liftFin.symm a
+/-- Conversion of a finite `Ultra U α` back to `α` -/
+def std {α : Type} [Finite α] (a : Ultra U α) : α := liftFin.symm a
 
 /-- Function application of nonstandard objects: the result is defined where both
 sections are, a set in the filter because filters are closed under intersections. -/
-def app {α : Type} {β : Type} (f : Ultra (α → β)) (a : Ultra α) : Ultra β :=
+def app {α : Type} {β : Type} (f : Ultra U (α → β)) (a : Ultra U α) : Ultra U β :=
   Quotient.lift₂
     (fun f' a' ↦ mk ⟨f'.domain ∩ a'.domain, inter_mem f'.large a'.large,
       fun i ↦ f'.value ⟨i, i.2.1⟩ (a'.value ⟨i, i.2.2⟩)⟩)
     (by
       intro f₁ a₁ f₂ a₂ hf ha
       apply Quotient.sound
-      show ∀ᶠ i in (ultraFilter : Filter ℕ), _
+      show ∀ᶠ i in (U : Filter I), _
       filter_upwards [hf, ha] with i h₁ h₂
       intro p q
       simp only [h₁ p.1 q.1, h₂ p.2 q.2])
@@ -189,58 +190,88 @@ def app {α : Type} {β : Type} (f : Ultra (α → β)) (a : Ultra α) : Ultra �
 Nonstandard functions do not contain any extra data that cannot be seen by applying.
 This is needed for a `FunLike` instance.
 -/
-theorem app.inj {α β : Type} (f₁ f₂ : Ultra (α → β)) (eq : app f₁ = app f₂) : f₁ = f₂ := by
+theorem app.inj {α β : Type} (f₁ f₂ : Ultra U (α → β)) (eq : app f₁ = app f₂) : f₁ = f₂ := by
   induction f₁ using Quotient.inductionOn with | h s₁ => ?_
   induction f₂ using Quotient.inductionOn with | h s₂ => ?_
   apply Quotient.sound
-  show ∀ᶠ i in (ultraFilter : Filter ℕ), ∀ (h₁ : i ∈ s₁.domain) (h₂ : i ∈ s₂.domain),
+  show ∀ᶠ i in (U : Filter I), ∀ (h₁ : i ∈ s₁.domain) (h₂ : i ∈ s₂.domain),
     s₁.value ⟨i, h₁⟩ = s₂.value ⟨i, h₂⟩
   by_contra hne
   -- T: the indices where both are defined and some point `x` tells them apart
   have hT : {i | ∃ (h₁ : i ∈ s₁.domain) (h₂ : i ∈ s₂.domain) (x : α),
-      s₁.value ⟨i, h₁⟩ x ≠ s₂.value ⟨i, h₂⟩ x} ∈ (ultraFilter : Filter ℕ) := by
+      s₁.value ⟨i, h₁⟩ x ≠ s₂.value ⟨i, h₂⟩ x} ∈ (U : Filter I) := by
     have hc := Ultrafilter.compl_mem_iff_notMem.mpr hne
     filter_upwards [hc] with i hi
     simp only [mem_compl_iff, mem_ofPred_eq, not_forall] at hi
     obtain ⟨h₁, h₂, hne'⟩ := hi
     exact ⟨h₁, h₂, Function.ne_iff.mp hne'⟩
   -- the witness: defined only on T, picks such a point at each index
-  let a : Ultra α := mk ⟨_, hT, fun i ↦ i.2.choose_spec.choose_spec.choose⟩
-  have h : ∀ᶠ i in (ultraFilter : Filter ℕ), _ := Quotient.exact (congrFun eq a)
+  let a : Ultra U α := mk ⟨_, hT, fun i ↦ i.2.choose_spec.choose_spec.choose⟩
+  have h : ∀ᶠ i in (U : Filter I), _ := Quotient.exact (congrFun eq a)
   obtain ⟨i, hi, hTi⟩ := (h.and hT).exists
   exact hTi.choose_spec.choose_spec.choose_spec
     (hi ⟨hTi.choose, hTi⟩ ⟨hTi.choose_spec.choose, hTi⟩)
 
--- Automatically treat packed functions of type `Ultra (α → β)`
--- as functions `Ultra α → Ultra β`
-instance (α β : Type) : FunLike (Ultra (α → β)) (Ultra α) (Ultra β) where
+-- Automatically treat packed functions of type `Ultra U (α → β)`
+-- as functions `Ultra U α → Ultra U β`
+instance {I : Type} (U : Ultrafilter I) (α β : Type) :
+    FunLike (Ultra U (α → β)) (Ultra U α) (Ultra U β) where
   coe := app
   coe_injective := app.inj
 
+/-- The diagonal: the index set seen inside its own extension. -/
+def diag (U : Ultrafilter I) : Ultra U I := ofFun id
+
+/-- For a free ultrafilter the diagonal is non-standard: it equals `lift i` only on `{i}`,
+and a free ultrafilter contains no finite set. -/
+theorem diag_ne_lift (hU : (U : Filter I) ≤ .cofinite) (i : I) : diag U ≠ lift i := by
+  intro eq
+  have h : ∀ᶠ j in (U : Filter I), ∀ (_ : j ∈ univ) (_ : j ∈ univ), j = i :=
+    Quotient.exact eq
+  obtain ⟨j, hj, hne⟩ := (h.and (hU (Filter.eventually_cofinite_ne i))).exists
+  exact hne (hj trivial trivial)
+
 end Ultra
 
--- Allow writing `a < b` for `a b : Ultra α`
-instance (α : Type) [LT α] : LT (Ultra α) where
+-- Allow writing `a < b` for `a b : Ultra U α`
+instance {I : Type} (U : Ultrafilter I) (α : Type) [LT α] : LT (Ultra U α) where
   lt a b := (Ultra.lift LT.lt a b).std
 
-/-- A nonstandard natural number -/
-def big : Ultra ℕ := Ultra.ofFun id
+/-! ## Test case: the index set `ℕ` -/
+
+/-- A nonstandard natural number: the diagonal for the index set `ℕ`. -/
+def big (U : Ultrafilter ℕ) : Ultra U ℕ := Ultra.diag U
+
+/-- `big` is non-standard, as a case of the general `diag_ne_lift`. -/
+example (U : Ultrafilter ℕ) (hU : (U : Filter ℕ) ≤ .cofinite) (n : ℕ) :
+    big U ≠ Ultra.lift n :=
+  Ultra.diag_ne_lift hU n
+
 /-- Nonstandard natural number `big` is bigger than all standard natural numbers. -/
-theorem big_gt (n : ℕ) : n < big := by
-  -- the ultrafilter refines `atTop`, so it contains every tail `{i | n < i}`
-  have hev : ∀ᶠ i in (ultraFilter : Filter ℕ), n < i :=
-    Ultrafilter.of_le _ (Filter.eventually_gt_atTop n)
+theorem big_gt (U : Ultrafilter ℕ) (hU : (U : Filter ℕ) ≤ .cofinite) (n : ℕ) :
+    (n : Ultra U ℕ) < big U := by
+  -- `U` refines the Fréchet filter, so it contains every cofinite set,
+  -- in particular `{i | n < i}`, whose complement `{i | i ≤ n}` is finite
+  have hev : ∀ᶠ i in (U : Filter ℕ), n < i :=
+    hU (Filter.eventually_cofinite.mpr
+      ((Set.finite_le_nat n).subset fun _ hi ↦ not_lt.mp hi))
   -- so the comparison `n < big` is true on a set in the ultrafilter
-  have hx : Ultra.app (Ultra.app (Ultra.lift (LT.lt : ℕ → ℕ → Prop)) (Ultra.lift n)) big
-      = Ultra.lift True := by
+  have hx : Ultra.app (Ultra.app (Ultra.lift (U := U) (LT.lt : ℕ → ℕ → Prop))
+      (Ultra.lift n)) (big U) = Ultra.lift True := by
     apply Quotient.sound
-    show ∀ᶠ i in (ultraFilter : Filter ℕ), _
+    show ∀ᶠ i in (U : Filter ℕ), _
     filter_upwards [hev] with i hi
     intro _ _
     simpa using hi
-  have hstd : Ultra.std (Ultra.lift True) = True := Ultra.liftFin.symm_apply_apply True
-  change Ultra.std (Ultra.app (Ultra.app (Ultra.lift (LT.lt : ℕ → ℕ → Prop)) (Ultra.lift n)) big)
+  have hstd : Ultra.std (Ultra.lift (U := U) True) = True :=
+    Ultra.liftFin.symm_apply_apply True
+  change Ultra.std (Ultra.app (Ultra.app (Ultra.lift (U := U) (LT.lt : ℕ → ℕ → Prop))
+    (Ultra.lift n)) (big U))
   rw [hx, hstd]
   trivial
+
+/-- Example: Mathlib's free ultrafilter `hyperfilter ℕ` (built from the Fréchet filter). -/
+example (n : ℕ) : (n : Ultra (hyperfilter ℕ) ℕ) < big (hyperfilter ℕ) :=
+  big_gt (hyperfilter ℕ) hyperfilter_le_cofinite n
 
 end
