@@ -34,6 +34,14 @@ Take as representatives the pairs `(D, f)` with `D ∈ F` and `f ∈ ∏_{i ∈ 
 Why this case is often ignored:
 https://mathoverflow.net/questions/55989/ultraproducts-and-the-empty-set
 
+## Ultrapowers
+
+For an ultrafilter `U` on an index set `I`, the ultrapower `Ultra U α` is the partial product
+with constant fibre `α`. It is defined for every ultrafilter; it is a proper (nonstandard)
+extension of `α` when `U` is free, i.e. contains the Fréchet filter of cofinite sets.
+The index set `ℕ` serves as a test case: there `big U = [n ↦ n]` exceeds every standard
+natural number.
+
 ## A related proposal from Zulip
 
 ```
@@ -73,15 +81,16 @@ theorem mathlib_product_empty (F : Filter ℕ) :
   unfold Filter.Product at x
   exact Quotient.inductionOn x (fun f => zero_fiber_is_empty.false (f 0))
 
-/-! ## The product over a "almost everywhere" index-/
+/-! ## The partial product: representatives defined almost everywhere -/
 
 variable {α : Type*} (F : Filter α) (E : α → Type*)
 
-/-- A section defined only on a set of indices that belongs to `F`. -/
+/-- A partial section of `E`: a choice of an element of `E i` for every index `i` in a
+domain that belongs to `F`. -/
 structure Section where
   /-- The indices where the section is defined. -/
   domain : Set α
-  /-- The domain is large: it belongs to the filter. -/
+  /-- The domain is large, i.e. it belongs to `F`. -/
   large : domain ∈ F
   /-- The value at each index of the domain. -/
   value : (i : domain) → E i.val
@@ -112,10 +121,9 @@ end Product
 
 noncomputable section
 
-/--
-Let us construct an ultrapower by using costant sections in the product by (fun _ ↦ α)
-Converts a Type into a nonstandard Type using an ultrafilter `U`,
-for example `Ultra U ℕ` are non-standard natural numbers. -/
+/-- The ultrapower of `α` along an ultrafilter `U` on an index set `I`: the partial product
+whose fibre is `α` at every index (the constant family `fun _ ↦ α`). For example, for a free
+ultrafilter `U` on `ℕ`, `Ultra U ℕ` contains nonstandard natural numbers. -/
 def Ultra {I : Type} (U : Ultrafilter I) (α : Type) : Type :=
   Product.PartialProduct (U : Filter I) (fun _ ↦ α)
 
@@ -123,22 +131,23 @@ namespace Ultra
 
 variable {I : Type} {U : Ultrafilter I}
 
-/-- The class of a section: the basic way to build an element of `Ultra U α`.
-  The output is the equivalence class [s] under the relation "two sections are equivalent when,
-  for U-almost every index, they agree wherever both are defined." -/
+/-- The equivalence class `[s]` of a section `s`, where two sections are equivalent when,
+for `U`-almost every index, they agree wherever both are defined. Every element of
+`Ultra U α` is of this form. -/
 def mk {α : Type} (s : Product.Section (U : Filter I) (fun _ ↦ α)) : Ultra U α :=
   Quotient.mk (Product.partialProductSetoid (U : Filter I) (fun _ ↦ α)) s
 
-/-- The section defined at every index by `f`. -/
+/-- The class `[f]` of a total function `f : I → α`, viewed as a section with domain `I`. -/
 def ofFun {α : Type} (f : I → α) : Ultra U α :=
   mk ⟨univ, univ_mem, fun i ↦ f i⟩
 
-/-- Lifts an object into the nonstandard type -/
+/-- The standard embedding `α → Ultra U α`: `a` is sent to the class of the constant
+function with value `a`. -/
 @[coe] def lift {α : Type} (a : α) : Ultra U α := ofFun (fun _ ↦ a)
 instance {I : Type} (U : Ultrafilter I) (α : Type) : Coe α (Ultra U α) := ⟨Ultra.lift⟩
 
-/-- `lift` of a standard number to nonstandard is injective: if `lift a₁ = lift a₂`,
-then `a₁ = a₂` on a set in the ultrafilter, which is never empty. -/
+/-- The standard embedding is injective: if `lift a₁ = lift a₂`, then `a₁ = a₂` holds on a
+set in `U`; this set is nonempty, hence `a₁ = a₂`. -/
 theorem lift.inj {α : Type} : (Ultra.lift (U := U) (α := α)).Injective := by
   intro a₁ a₂ eq
   have h : ∀ᶠ i in (U : Filter I), ∀ (_ : i ∈ univ) (_ : i ∈ univ), a₁ = a₂ :=
@@ -146,9 +155,9 @@ theorem lift.inj {α : Type} : (Ultra.lift (U := U) (α := α)).Injective := by
   obtain ⟨i, hi⟩ := h.exists
   exact hi trivial trivial
 
-/-- If `α` is finite, every nonstandard object can be represented with a standard one:
-the domain is a finite union of the sets where the section takes each value, and an
-ultrafilter contains one piece of any finite union it contains. -/
+/-- If `α` is finite, the standard embedding is surjective: the domain of a section is the
+finite union of the sets on which it takes each value, and an ultrafilter containing a
+finite union contains one of its members. -/
 theorem lift.surj {α : Type} [Finite α] : (lift (U := U) (α := α)).Surjective := by
   intro x
   induction x using Quotient.inductionOn with | h s => ?_
@@ -168,14 +177,16 @@ theorem lift.surj {α : Type} [Finite α] : (lift (U := U) (α := α)).Surjectiv
   intro _ _
   exact hv.symm
 
-/-- On finite types, `lift` between `α` and `Ultra U α` as an isomorphism. -/
+/-- For finite `α`, the standard embedding is a bijection `α ≃ Ultra U α`. -/
 def liftFin {α : Type} [Finite α] : α ≃ Ultra U α :=
   .ofBijective Ultra.lift ⟨Ultra.lift.inj, Ultra.lift.surj⟩
-/-- Conversion of a finite `Ultra U α` back to `α` -/
+/-- For finite `α`, the standard part of `a : Ultra U α`: the unique `b : α` with
+`lift b = a`. -/
 def std {α : Type} [Finite α] (a : Ultra U α) : α := liftFin.symm a
 
-/-- Function application of nonstandard objects: the result is defined where both
-sections are, a set in the filter because filters are closed under intersections. -/
+/-- Application of a nonstandard function to a nonstandard element, index by index. The
+result is defined on the intersection of the two domains, which belongs to `U` because
+filters are closed under finite intersections. -/
 def app {α : Type} {β : Type} (f : Ultra U (α → β)) (a : Ultra U α) : Ultra U β :=
   Quotient.lift₂
     (fun f' a' ↦ mk ⟨f'.domain ∩ a'.domain, inter_mem f'.large a'.large,
@@ -189,10 +200,9 @@ def app {α : Type} {β : Type} (f : Ultra U (α → β)) (a : Ultra U α) : Ult
       simp only [h₁ p.1 q.1, h₂ p.2 q.2])
     f a
 
-/--
-Nonstandard functions do not contain any extra data that cannot be seen by applying.
-This is needed for a `FunLike` instance.
--/
+/-- Extensionality: a nonstandard function is determined by its values. If `f₁ ≠ f₂`, they
+differ on a set `T ∈ U`, and an element defined only on `T` separates them. This is
+needed for the `FunLike` instance below. -/
 theorem app.inj {α β : Type} (f₁ f₂ : Ultra U (α → β)) (eq : app f₁ = app f₂) : f₁ = f₂ := by
   induction f₁ using Quotient.inductionOn with | h s₁ => ?_
   induction f₂ using Quotient.inductionOn with | h s₂ => ?_
@@ -215,18 +225,17 @@ theorem app.inj {α β : Type} (f₁ f₂ : Ultra U (α → β)) (eq : app f₁ 
   exact hTi.choose_spec.choose_spec.choose_spec
     (hi ⟨hTi.choose, hTi⟩ ⟨hTi.choose_spec.choose, hTi⟩)
 
--- Automatically treat packed functions of type `Ultra U (α → β)`
--- as functions `Ultra U α → Ultra U β`
+-- Elements of `Ultra U (α → β)` can be applied as functions `Ultra U α → Ultra U β`.
 instance {I : Type} (U : Ultrafilter I) (α β : Type) :
     FunLike (Ultra U (α → β)) (Ultra U α) (Ultra U β) where
   coe := app
   coe_injective := app.inj
 
-/-- The diagonal: the index set seen inside its own extension. -/
+/-- The diagonal `[i ↦ i]`: the class of the identity of `I`, an element of `Ultra U I`. -/
 def diag (U : Ultrafilter I) : Ultra U I := ofFun id
 
-/-- For a free ultrafilter the diagonal is non-standard: it equals `lift i` only on `{i}`,
-and a free ultrafilter contains no finite set. -/
+/-- For a free ultrafilter the diagonal is nonstandard: it agrees with `lift i` only on
+`{i}`, and a free ultrafilter contains no finite set. -/
 theorem diag_ne_lift (hU : (U : Filter I) ≤ .cofinite) (i : I) : diag U ≠ lift i := by
   intro eq
   have h : ∀ᶠ j in (U : Filter I), ∀ (_ : j ∈ univ) (_ : j ∈ univ), j = i :=
@@ -236,7 +245,7 @@ theorem diag_ne_lift (hU : (U : Filter I) ≤ .cofinite) (i : I) : diag U ≠ li
 
 end Ultra
 
--- Allow writing `a < b` for `a b : Ultra U α`
+-- Order on `Ultra U α`: `a < b` holds when `a i < b i` for `U`-almost every index `i`.
 instance {I : Type} (U : Ultrafilter I) (α : Type) [LT α] : LT (Ultra U α) where
   lt a b := (Ultra.lift LT.lt a b).std
 
@@ -249,8 +258,17 @@ variable (U : Ultrafilter ℕ)
 /-- Inside this section, `∗α` means `Ultra U α` for the fixed ultrafilter `U`. -/
 local notation "∗" α:max => Ultra U α
 
-/-- A nonstandard natural number: the diagonal for the index set `ℕ`. -/
+local notation "⟦" a "⟧ᵤ" => Ultra.mk a
+local notation "*" a => Ultra.mk a
+
+/-- Inside this section, `⟦f⟧ᵤ` means the class `[f]` of a function `f : ℕ → α` in `∗α`. -/
+local notation "⟦" f "⟧ᵤ" => Ultra.ofFun (U := U) f
+
+/-- The diagonal `[n ↦ n]` for the index set `ℕ`; nonstandard when `U` is free. -/
 def big : ∗ℕ := Ultra.diag U
+
+/-- `big U` is the class of the identity. -/
+example : big U = ⟦id⟧ᵤ := rfl
 
 /-- `big` is non-standard, as a case of the general `diag_ne_lift`. -/
 example (hU : (U : Filter ℕ) ≤ .cofinite) (n : ℕ) : big U ≠ (n : ∗ℕ) :=
@@ -259,7 +277,7 @@ example (hU : (U : Filter ℕ) ≤ .cofinite) (n : ℕ) : big U ≠ (n : ∗ℕ)
 /-- Applying a nonstandard function to a nonstandard number. -/
 example (f : ∗(ℕ → ℕ)) (x : ∗ℕ) : ∗ℕ := f x
 
-/-- Nonstandard natural number `big` is bigger than all standard natural numbers. -/
+/-- For a free ultrafilter `U`, `big U` is greater than every standard natural number. -/
 theorem big_gt (hU : (U : Filter ℕ) ≤ .cofinite) (n : ℕ) : (n : ∗ℕ) < big U := by
   -- `U` refines the Fréchet filter, so it contains every cofinite set,
   -- in particular `{i | n < i}`, whose complement `{i | i ≤ n}` is finite
