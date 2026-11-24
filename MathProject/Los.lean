@@ -292,8 +292,7 @@ theorem boundedFormula_realize_cast {β : Type*} [Finite β] {n : ℕ}
 
 
 
-/-- Here we need to enforce the finiteness of \beta somehow, this need to be fixed!
-
+/-- Here we need to enforce the finiteness of \beta somehow, this need to be fixed! -/
 theorem realize_formula_cast {β : Type*} [Finite β] (φ : L.Formula β)
     (x : β → Section (u : Filter α) M) :
     (φ.Realize fun i ↦ (⟦x i⟧ : PartialProduct (u : Filter α) M)) ↔
@@ -312,6 +311,23 @@ theorem realize_formula_cast {β : Type*} [Finite β] (φ : L.Formula β)
   · rw [Subsingleton.elim (valuesAt e _) (default : Fin 0 → M a)]
     exact H hx
 
+/-- Łoś's Theorem for a formula with names from any set `β`, possibly infinite. A formula
+mentions only finitely many of its names, `φ.freeVarFinset`, so only the sections for those
+names are intersected. On the right, `φ.restrictFreeVar id` is `φ` with its names taken from
+that finite set: in `M a` it needs values only for the names it uses. -/
+theorem realize_formula_cast' {β : Type*} [DecidableEq β] (φ : L.Formula β)
+    (x : β → Section (u : Filter α) M) :
+    (φ.Realize fun i ↦ (⟦x i⟧ : PartialProduct (u : Filter α) M)) ↔
+      ∀ᶠ a : α in u, ∀ hx : a ∈ commonDomain (fun i : φ.freeVarFinset ↦ x i),
+        Formula.Realize (φ.restrictFreeVar id : L.Formula φ.freeVarFinset)
+          (valuesAt (fun i : φ.freeVarFinset ↦ x i) hx) :=
+  -- in the partial ultraproduct, `φ` and its restriction are true together (Mathlib),
+  -- and the restriction has finitely many names, so the finite version applies
+  (BoundedFormula.realize_restrictFreeVar (f := id)
+    (v := fun i : φ.freeVarFinset ↦ (⟦x i⟧ : PartialProduct (u : Filter α) M))
+    (fun i ↦ (⟦x i⟧ : PartialProduct (u : Filter α) M)) fun _ ↦ rfl).symm.trans
+    (realize_formula_cast _ fun i : φ.freeVarFinset ↦ x i)
+
 /-- **Łoś's Theorem** for the partial product: a sentence is true in the partial ultraproduct
 if and only if the set of structures it is true in is in the ultrafilter. Unlike Mathlib's
 version, no structure `M a` needs to be nonempty. -/
@@ -329,6 +345,109 @@ theorem sentence_realize (φ : L.Sentence) :
     exact H (he a)
   · rw [Subsingleton.elim (valuesAt e _) (default : Empty → M a)]
     exact H
+
+/-! ### Comparison with Mathlib's ultraproduct
+
+When every `M a` is nonempty, the partial ultraproduct is isomorphic to Mathlib's
+`Filter.Product`. -/
+
+/-- A function defined at every index, seen as a section whose domain is all of `α`. -/
+def totalSection (f : ∀ a, M a) : Section (u : Filter α) M :=
+  ⟨univ, univ_mem, fun a ↦ f a⟩
+
+/-- From Mathlib's ultraproduct to the partial one. It is well defined: functions that agree
+almost everywhere give sections that agree almost everywhere. -/
+def ofProduct : (u : Filter α).Product M → PartialProduct (u : Filter α) M :=
+  Quotient.lift (fun f ↦ (Quotient.mk _ (totalSection f) : PartialProduct (u : Filter α) M))
+    fun _ _ h ↦ Quotient.sound (h.mono fun _ ha _ _ ↦ ha)
+
+theorem ofProduct_mk (f : ∀ a, M a) :
+    ofProduct (u := u) (Quotient.mk _ f) = Quotient.mk _ (totalSection f) :=
+  rfl
+
+/-- Finitely many elements of Mathlib's ultraproduct come from finitely many functions. -/
+theorem exists_reps {n : ℕ} (x : Fin n → (u : Filter α).Product M) :
+    ∃ g : Fin n → ∀ a, M a, x = fun i ↦ Quotient.mk _ (g i) :=
+  ⟨fun i ↦ Quotient.out (x i), funext fun _ ↦ (Quotient.out_eq _).symm⟩
+
+section Nonempty
+
+variable [∀ a, Nonempty (M a)]
+
+open Classical in
+/-- A section extended to every index: its own value on its domain, a chosen element of
+`M a` elsewhere. This is the only place where the structures must be nonempty. -/
+noncomputable def extend (s : Section (u : Filter α) M) (a : α) : M a :=
+  if h : a ∈ s.domain then s.value ⟨a, h⟩ else Classical.arbitrary (M a)
+
+theorem extend_of_mem (s : Section (u : Filter α) M) {a : α} (h : a ∈ s.domain) :
+    extend s a = s.value ⟨a, h⟩ :=
+  dite_eq_left h
+
+/-- From the partial ultraproduct to Mathlib's. It is well defined: two equivalent sections
+agree almost everywhere on the overlap of their domains, which is in `u`, and the chosen
+values outside the domains do not matter. -/
+noncomputable def toProduct : PartialProduct (u : Filter α) M → (u : Filter α).Product M :=
+  Quotient.lift (fun s ↦ (Quotient.mk _ (extend s) : (u : Filter α).Product M))
+    fun s t h ↦ Quotient.sound <| by
+      filter_upwards [h, s.large, t.large] with a ha hs ht
+      rw [extend_of_mem s hs, extend_of_mem t ht]
+      exact ha hs ht
+
+theorem toProduct_mk (s : Section (u : Filter α) M) :
+    toProduct (Quotient.mk _ s) = (Quotient.mk _ (extend s) : (u : Filter α).Product M) :=
+  rfl
+
+/-- Total function → section → total function gives back the same function. -/
+theorem toProduct_ofProduct (x : (u : Filter α).Product M) : toProduct (ofProduct x) = x := by
+  induction x using Quotient.inductionOn with
+  | h f =>
+    exact Quotient.sound (Eventually.of_forall fun a ↦ extend_of_mem (totalSection f) (mem_univ a))
+
+/-- Section → total function → section gives a section equivalent to the first one: they agree
+on its whole domain. -/
+theorem ofProduct_toProduct (y : PartialProduct (u : Filter α) M) :
+    ofProduct (toProduct y) = y := by
+  induction y using Quotient.inductionOn with
+  | h s =>
+    exact Quotient.sound (Eventually.of_forall fun a _ h ↦ extend_of_mem s h)
+
+/-- The two ultraproducts correspond one to one. -/
+noncomputable def productEquiv : (u : Filter α).Product M ≃ PartialProduct (u : Filter α) M where
+  toFun := ofProduct
+  invFun := toProduct
+  left_inv := toProduct_ofProduct
+  right_inv := ofProduct_toProduct
+
+/-- **Comparison with Mathlib.** When every `M a` is nonempty, Mathlib's ultraproduct and the
+partial ultraproduct are isomorphic first-order structures. -/
+noncomputable def productLEquiv :
+    (u : Filter α).Product M ≃[L] PartialProduct (u : Filter α) M where
+  toEquiv := productEquiv
+  map_fun' := by
+    intro n f x
+    obtain ⟨g, rfl⟩ := exists_reps x
+    -- both sides are computed index by index, with the same values
+    exact (congrArg ofProduct (Ultraproduct.funMap_cast (u := u) f g)).trans
+      ((Quotient.sound (Eventually.of_forall fun _ _ _ ↦ rfl)).trans
+        (funMap_cast f fun i ↦ totalSection (g i)).symm)
+  map_rel' := by
+    intro n r x
+    obtain ⟨g, rfl⟩ := exists_reps x
+    refine (relMap_quotient_mk' (partialProductSetoid (u : Filter α) M) r
+      fun i ↦ totalSection (g i)).trans
+      (Iff.trans ?_ (relMap_quotient_mk' ((u : Filter α).productSetoid M) r g).symm)
+    -- the sections are defined everywhere, so "where defined" adds nothing
+    exact ⟨fun H ↦ H.mono fun a ha ↦ ha (mem_iInter.2 fun _ ↦ mem_univ a),
+      fun H ↦ H.mono fun _ ha _ ↦ ha⟩
+
+/-- Mathlib's Łoś's Theorem, recovered from the partial version through the isomorphism
+`productLEquiv`, without using Mathlib's own proof. -/
+theorem product_sentence_realize (φ : L.Sentence) :
+    (u : Filter α).Product M ⊨ φ ↔ ∀ᶠ a : α in u, M a ⊨ φ :=
+  (StrongHomClass.realize_sentence productLEquiv φ).trans (sentence_realize φ)
+
+end Nonempty
 
 end PartialUltraproduct
 
