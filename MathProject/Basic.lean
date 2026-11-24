@@ -113,6 +113,7 @@ end Product
 noncomputable section
 
 /--
+Let us construct an ultrapower by using costant sections in the product by (fun _ ↦ α)
 Converts a Type into a nonstandard Type using an ultrafilter `U`,
 for example `Ultra U ℕ` are non-standard natural numbers. -/
 def Ultra {I : Type} (U : Ultrafilter I) (α : Type) : Type :=
@@ -122,9 +123,11 @@ namespace Ultra
 
 variable {I : Type} {U : Ultrafilter I}
 
-/-- The class of a section: the basic way to build an element of `Ultra U α`. -/
+/-- The class of a section: the basic way to build an element of `Ultra U α`.
+  The output is the equivalence class [s] under the relation "two sections are equivalent when,
+  for U-almost every index, they agree wherever both are defined." -/
 def mk {α : Type} (s : Product.Section (U : Filter I) (fun _ ↦ α)) : Ultra U α :=
-  Quotient.mk _ s
+  Quotient.mk (Product.partialProductSetoid (U : Filter I) (fun _ ↦ α)) s
 
 /-- The section defined at every index by `f`. -/
 def ofFun {α : Type} (f : I → α) : Ultra U α :=
