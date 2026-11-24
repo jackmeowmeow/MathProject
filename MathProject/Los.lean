@@ -282,6 +282,18 @@ theorem boundedFormula_realize_cast {β : Type*} [Finite β] {n : ℕ}
       rw [valuesAt_snoc v m hv' hv hm]
       exact ha hx hv _
 
+
+
+
+
+
+
+
+
+
+
+/-- Here we need to enforce the finiteness of \beta somehow, this need to be fixed!
+
 theorem realize_formula_cast {β : Type*} [Finite β] (φ : L.Formula β)
     (x : β → Section (u : Filter α) M) :
     (φ.Realize fun i ↦ (⟦x i⟧ : PartialProduct (u : Filter α) M)) ↔
