@@ -258,7 +258,7 @@ variable (U : Ultrafilter ℕ)
 /-- Inside this section, `∗α` means `Ultra U α` for the fixed ultrafilter `U`. -/
 local notation "∗" α:max => Ultra U α
 
-local notation "⟦" a "⟧ᵤ" => Ultra.mk a
+/-- Inside this section, `* s` means the class `[s]` of a section `s` in `∗α`. -/
 local notation "*" a => Ultra.mk a
 
 /-- Inside this section, `⟦f⟧ᵤ` means the class `[f]` of a function `f : ℕ → α` in `∗α`. -/
