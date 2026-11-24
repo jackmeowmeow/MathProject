@@ -1,0 +1,201 @@
+import Mathlib
+
+/-!
+# Filter products over "almost every" index
+
+`Filter.Product F E` is the quotient of the *total* dependent functions `(i : α) → E i`
+by the relation "equal on a set of indices in `F`". If even one fibre `E i` is empty,
+there are no total functions at all, so the product is empty, even when the empty
+fibres form a set that `F` ignores.
+
+This file shows the problem on an example and then builds a version whose
+representatives only need to be defined on some set in `F`.
+
+## The problem
+
+Mathlib's relation (`Filter.productSetoid`, a dependent version of `Filter.germSetoid`):
+
+```
+def productSetoid (l : Filter α) (ε : α → Type*) : Setoid ((a : _) → ε a) where
+  r f g := ∀ᶠ a in l, f a = g a
+```
+
+The relation itself only looks at "almost every" index, but its representatives must be
+defined at *every* index.
+
+## The fix
+
+Take as representatives the pairs `(D, f)` with `D ∈ F` and `f ∈ ∏_{i ∈ D} E i`, and set
+
+  `(D, f) ∼_F (D', g)  ↔  {i ∈ D ∩ D' | f i = g i} ∈ F`.
+
+Why this case is often ignored:
+https://mathoverflow.net/questions/55989/ultraproducts-and-the-empty-set
+
+## A related proposal from Zulip
+
+```
+instance : CoeSort (Filter α) (Type _) where coe f := f.sets
+instance (f : Filter α) : CoeSort f (Type _) where coe s := s
+
+def Filter.betterProductSetoid (l : Filter α) (ε : α → Type*) :
+    Setoid ((s : l) × ((a : s) → ε a)) where
+  r := fun ⟨s, f⟩ ⟨t, g⟩ => ∃ (u : l) (hs : u ≤ s) (ht : u ≤ t),
+    ∀ x : u, f ⟨x, hs x.prop⟩ = g ⟨x, ht x.prop⟩
+  iseqv := sorry
+
+def Filter.betterProduct (l : Filter α) (ε : α → Type*) :=
+  Quotient <| l.betterProductSetoid ε
+```
+-/
+
+open Set Filter
+
+namespace Product
+
+/-! ## Example: one empty fibre empties Mathlib's product -/
+
+/-- The fibre over `i` is `{0, 1, …, i - 1}`, so the fibre over `0` is empty. -/
+def A (i : ℕ) := Finset.range i
+
+/-- The fibre over `0` is empty. -/
+theorem zero_fiber_is_empty : IsEmpty (A 0) :=
+  ⟨fun n => List.not_mem_nil n.property⟩
+
+/-- Whatever the filter (even one that ignores the index `0`), Mathlib's product of
+the fibres `A i` is empty: a representative would need a value in `A 0`. -/
+theorem mathlib_product_empty (F : Filter ℕ) :
+    IsEmpty (Filter.Product F (fun i => (A i : Type))) := by
+  constructor
+  intro x
+  unfold Filter.Product at x
+  exact Quotient.inductionOn x (fun f => zero_fiber_is_empty.false (f 0))
+
+/-! ## The product over a "almost everywhere" index-/
+
+variable {α : Type*} (F : Filter α) (E : α → Type*)
+
+/-- A section defined only on a set of indices that belongs to `F`. -/
+structure Section where
+  /-- The indices where the section is defined. -/
+  domain : Set α
+  /-- The domain is large: it belongs to the filter. -/
+  large : domain ∈ F
+  /-- The value at each index of the domain. -/
+  value : (i : domain) → E i.val
+
+/-- Two sections are equivalent when, for `F`-almost every index, they agree wherever
+both are defined. -/
+def partialProductSetoid : Setoid (Section F E) where
+  r f g := ∀ᶠ i in F, ∀ (hf : i ∈ f.domain) (hg : i ∈ g.domain),
+    f.value ⟨i, hf⟩ = g.value ⟨i, hg⟩
+  iseqv := by
+    refine ⟨?_, ?_, ?_⟩
+    · -- reflexive
+      intro f
+      exact Filter.Eventually.of_forall (fun _ _ _ => rfl)
+    · -- symmetric
+      intro f g h
+      exact h.mono (fun _ hi hf hg => (hi hg hf).symm)
+    · -- transitive: on the domain of `g`, which is large, chain the two equalities
+      intro f g u hfg hgu
+      filter_upwards [hfg, hgu, g.large] with i hi hj ht
+      intro hf hu
+      exact (hi hf ht).trans (hj ht hu)
+
+/-- The partial filter product: sections on large sets, up to `partialProductSetoid`. -/
+def PartialProduct := Quotient (partialProductSetoid F E)
+
+end Product
+
+noncomputable section
+
+def ultraFilter : Ultrafilter ℕ := Ultrafilter.of .atTop
+
+/--
+Converts a Type into a nonstandard Type using an ultrafilter,
+for example `Ultra ℕ` are non-standard natural numbers. -/
+def Ultra (α : Type) : Type := Product.PartialProduct (ultraFilter : Filter ℕ) (fun _ ↦ α)
+
+namespace Ultra
+
+/-- The class of a section: the basic way to build an element of `Ultra α`. -/
+def mk {α : Type} (s : Product.Section (ultraFilter : Filter ℕ) (fun _ ↦ α)) : Ultra α :=
+  Quotient.mk _ s
+
+/-- The section defined at every index by `f`. -/
+def ofFun {α : Type} (f : ℕ → α) : Ultra α :=
+  mk ⟨univ, univ_mem, fun i ↦ f i⟩
+
+/-- Lifts an object into the nonstandard type -/
+@[coe] def lift {α : Type} (a : α) : Ultra α := ofFun (fun _ ↦ a)
+instance (α : Type) : Coe α (Ultra α) := ⟨Ultra.lift⟩
+
+/-- `lift` of a standard number to nonstandard is injective: if `lift a₁ = lift a₂`,
+then `a₁ = a₂` on a set in the ultrafilter, which is never empty. -/
+theorem lift.inj {α : Type} : (Ultra.lift (α := α)).Injective := by
+  intro a₁ a₂ eq
+  have h : ∀ᶠ i in (ultraFilter : Filter ℕ), ∀ (_ : i ∈ univ) (_ : i ∈ univ), a₁ = a₂ :=
+    Quotient.exact eq
+  obtain ⟨i, hi⟩ := h.exists
+  exact hi trivial trivial
+
+-- TODO: this (+ some way of moving filters around)
+-- could be used to show that `liftObj` is surjective for `Finite α`
+#check Ultrafilter.eq_pure_of_finite
+
+/-- If `α` is finite, every nonstandard object can be represented with a standard one. -/
+theorem lift.surj {α : Type} [Finite α] : (lift (α := α)).Surjective :=
+  sorry
+
+/-- On finite types, `lift` between `α` and `Ultra α` as an isomorphism. -/
+def liftFin {α : Type} [Finite α] : α ≃ Ultra α :=
+  .ofBijective Ultra.lift ⟨Ultra.lift.inj, Ultra.lift.surj⟩
+/-- Conversion of a finite `Ultra α` back to `α` -/
+def std {α : Type} [Finite α] (a : Ultra α) : α := liftFin.symm a
+
+/-- Function application of nonstandard objects: the result is defined where both
+sections are, a set in the filter because filters are closed under intersections. -/
+def app {α : Type} {β : Type} (f : Ultra (α → β)) (a : Ultra α) : Ultra β :=
+  Quotient.lift₂
+    (fun f' a' ↦ mk ⟨f'.domain ∩ a'.domain, inter_mem f'.large a'.large,
+      fun i ↦ f'.value ⟨i, i.2.1⟩ (a'.value ⟨i, i.2.2⟩)⟩)
+    (by
+      intro f₁ a₁ f₂ a₂ hf ha
+      apply Quotient.sound
+      show ∀ᶠ i in (ultraFilter : Filter ℕ), _
+      filter_upwards [hf, ha] with i h₁ h₂
+      intro p q
+      simp only [h₁ p.1 q.1, h₂ p.2 q.2])
+    f a
+
+/--
+Nonstandard functions do not contain any extra data that cannot be seen by applying.
+This is needed for a `FunLike` instance.
+-/
+theorem app.inj {α β : Type} (f₁ f₂ : Ultra (α → β)) (eq : app f₁ = app f₂) : f₁ = f₂ := by
+  obtain ⟨f₁⟩ := f₁
+  obtain ⟨f₂⟩ := f₂
+  simp at eq ⊢
+  apply Filter.EventuallyEq.germ_eq
+  --  TODO
+  sorry
+
+-- Automatically treat packed functions of type `Ultra (α → β)`
+-- as functions `Ultra α → Ultra β`
+instance (α β : Type) : FunLike (Ultra (α → β)) (Ultra α) (Ultra β) where
+  coe := app
+  coe_injective' := app.inj
+
+end Ultra
+
+-- Allow writing `a < b` for `a b : Ultra α`
+instance (α : Type) [LT α] : LT (Ultra α) where
+  lt a b := (Ultra.lift LT.lt a b).std
+
+/-- A nonstandard natural number -/
+def big : Ultra ℕ := ⟦id⟧
+/-- Nonstandard natural number `big` is bigger than all standard natural numbers. -/
+theorem big_gt (n : ℕ) : n < big := sorry
+
+end
